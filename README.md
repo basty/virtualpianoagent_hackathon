@@ -11,11 +11,11 @@
 ## 📺 Demonstration
 **Watch the 4-minute demo here:**
 > [!IMPORTANT]
-> [Link to Demonstration Video (YouTube/Devpost)]
+> [[Link to Demonstration Video (YouTube/Devpost)](https://www.youtube.com/watch?v=j1fTLGUxA38)]
 
 **Watch proof of GCP Deployment (behind-the-scenes):**
 > [!IMPORTANT]
-> [Link to GCP Proof Video (YouTube/Devpost)]
+> [![Link to GCP Proof Video (YouTube/Devpost)](https://github.com/basty/virtualpianoagent_hackathon/blob/main/ag.png)]
 
 ---
 
