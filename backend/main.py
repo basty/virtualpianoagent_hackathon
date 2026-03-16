@@ -42,6 +42,10 @@ _RAW_KEY = os.getenv("GEMINI_API_KEY", "")
 # Strip quotes (common in .env files handled by some shells) and whitespace
 GEMINI_API_KEY = _RAW_KEY.strip(' "').strip()
 
+# When true, the backend will NOT use the server-side GEMINI_API_KEY
+# and will instead strictly require an api_key in the request.
+REQUIRE_CLIENT_KEY = os.getenv("REQUIRE_CLIENT_KEY", "false").lower() == "true"
+
 GEMINI_MODEL    = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
 GEMINI_ENDPOINT = (
     f"https://generativelanguage.googleapis.com/v1beta/models/"
@@ -223,10 +227,22 @@ async def _call_gemini(history: list[dict], api_key: Optional[str] = None) -> st
     # Clean the provided key if any
     clean_request_key = api_key.strip(' "').strip() if api_key else None
     
-    # Use provided key or fall back to server env
-    key = clean_request_key or GEMINI_API_KEY
+    # Selection logic:
+    # 1. Use key from request if provided
+    # 2. If REQUIRE_CLIENT_KEY is False, use GEMINI_API_KEY from server env
+    # 3. Otherwise, key is missing
+    key = clean_request_key
+    if not key and not REQUIRE_CLIENT_KEY:
+        key = GEMINI_API_KEY
+
     if not key:
-        raise HTTPException(status_code=400, detail="Gemini API Key missing. Please provide one in settings or server environment.")
+        msg = (
+            "Gemini API Key missing. "
+            "Please open Settings (⚙️) and enter your Gemini API Key to continue."
+            if REQUIRE_CLIENT_KEY else
+            "Gemini API Key missing. Please provide one in settings or server environment."
+        )
+        raise HTTPException(status_code=400, detail=msg)
 
     body = {
         "system_instruction": {"parts": [{"text": SYSTEM_INSTRUCTION}]},
