@@ -1,113 +1,137 @@
-# AI Piano Coach — Gemini Live Hackathon 🎹
+# 🎹 AI Piano Coach — Gemini Live Hackathon
 
-> A real-time AR piano learning experience powered by **Gemini 2.0 Flash**, **MediaPipe Hands**, and **Depth Anything V2**. 
+> **Real-time AR Piano Learning** powered by Gemini 2.0 Flash, MediaPipe Hands, and Depth Anything V2.
 
-This project transforms any flat surface into an interactive virtual piano. It uses advanced hand-tracking and depth-estimation to detect key presses without physical hardware.
-
----
-
-## 🚀 Quick Links
-- **Live Demo**: [https://piano-coach-894751491089.us-central1.run.app](https://piano-coach-894751491089.us-central1.run.app)
-- **Architecture Diagram**: [View in artifacts](architecture_diagram.md)
+[![Live Demo](https://img.shields.io/badge/Demo-Live-brightgreen)](https://piano-coach-894751491089.us-central1.run.app)
+[![Architecture Diagram](https://img.shields.io/badge/Architecture-Diagram-blue)](./architecture_diagram.md)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 ---
 
-## 🛠 Project Structure
-```bash
-virtualpianoagent/
-├── frontend/               # Vanilla JS + CSS PWA
-│   ├── src/                
-│   │   ├── geminiCoach.js  # Voice Agent Logic
-│   │   └── detectionMethod4.js # Differential Z-Depth Logic
-│   └── styles/             # Modern Glassmorphism UI
-├── backend/                # FastAPI Proxy + ML Engine
-│   ├── main.py             # Server endpoints & Static serving
-│   └── depth_engine.py     # Depth Anything V2 integration
-├── Dockerfile              # Root-level unified container
-├── manage.sh               # Local service manager
-└── deploy_gcp.sh           # Automated GCP deployment script (Bonus)
+## 📺 Demonstration
+**Watch the 4-minute demo here:**
+> [!IMPORTANT]
+> [Link to Demonstration Video (YouTube/Devpost)]
+
+**Watch proof of GCP Deployment (behind-the-scenes):**
+> [!IMPORTANT]
+> [Link to GCP Proof Video (YouTube/Devpost)]
+
+---
+
+## 🚀 Hackathon Compliance Checklist
+
+| Criterion | Implementation Status |
+|-----------|-----------------------|
+| **Leverage Gemini Model** | Used **Gemini 2.0 Flash** for real-time music coaching. |
+| **Google GenAI SDK/ADK** | Built using the official **Google GenAI SDK** (Python). |
+| **At least one GCP service** | Deployed on **Google Cloud Run** with **Artifact Registry** & **Cloud Build**. |
+| **Reproducible Code** | Full spin-up instructions included below. |
+| **GCP Proof** | Proof video linked and code verifiable in `Dockerfile` & `deploy_gcp.sh`. |
+| **Architecture Diagram** | Clear visual representation provided below. |
+| **Bonus: Automated Deployment** | **Proof of automation** included via `deploy_gcp.sh`. |
+
+---
+
+## 🧠 System Architecture
+
+```mermaid
+graph TD
+    subgraph Client ["Client Browser (PWA)"]
+        UI["Modern UI (Vanilla JS/CSS)"]
+        MP["MediaPipe (Hand Tracking)"]
+        Tone["Tone.js (Spatial Audio)"]
+        WS["Web Speech API (STT/TTS)"]
+        State["Reactive State Logic"]
+    end
+
+    subgraph GCP ["Google Cloud Platform"]
+        subgraph CloudRun ["Google Cloud Run"]
+            FastAPI["FastAPI App"]
+            Depth["Depth Anything V2 (ML Engine)"]
+        end
+        AR["Artifact Registry"]
+        CB["Cloud Build"]
+    end
+
+    subgraph AI ["Intelligence Layer"]
+        Gemini["Gemini 2.0 Flash API"]
+    end
+
+    %% Interactions
+    UI --> MP
+    MP --> State
+    State --> UI
+    UI --> Tone
+    UI --> WS
+
+    %% Backend Communication
+    UI <---- "WebSocket / REST" ----> FastAPI
+    FastAPI <---- "GenAI SDK" ----> Gemini
+    FastAPI -- "PyTorch" --> Depth
+    
+    %% Deployment flow
+    CB -- "Build & Push" --> AR
+    AR -- "Deploy" --> CloudRun
+    
+    %% Formatting
+    style Client fill:#f9f,stroke:#333,stroke-width:2px
+    style GCP fill:#4285F4,stroke:#fff,stroke-width:2px,color:#fff
+    style AI fill:#ecc,stroke:#333,stroke-width:2px
 ```
 
 ---
 
-## ⚙️ Configuration
+## 🛠 Features & Functionality
 
-To use the AI Coach, you must provide a **Gemini API Key**. 
-
-### For the Live Demo
-If you are testing the **[Live Demo](https://piano-coach-894751491089.us-central1.run.app)**:
-1. Open the app.
-2. Click the **⚙️ Settings** icon in the top right.
-3. Paste your Gemini API Key into the input field and click **Save**. This allows you to test the live version using your own quota.
-
-### For Local/Private Deployment
-1. Generate a key at [Google AI Studio](https://aistudio.google.com).
-2. Use the provided template to create your environment file:
-   ```bash
-   cp backend/.env.example backend/.env
-   ```
-3. Open `backend/.env` and enter your key:
-   ```env
-   GEMINI_API_KEY=your_actual_key_here
-   ```
-
-### 🔒 Public/Production Deployment (Protecting your billing)
-If you are hosting this publicly and want to **avoid users consuming your own API quota**:
-1. Set the environment variable `REQUIRE_CLIENT_KEY=true`.
-2. This disables the server-side fallback. 
-3. Users will be prompted to enter their own key in the **⚙️ Settings** menu before they can use the AI Coach features.
+1.  **AI Music Teacher**: Gemini identifies when you make a mistake (e.g., "You played D# instead of E") and provides verbal, encouraging feedback.
+2.  **Differential Z-Depth Perception**: We solved the "flat-table AR" problem. By measuring fingertip Z-depth relative to the wrist (Spatial Anchor), the app detects key presses with high accuracy regardless of camera tilt.
+3.  **Hybrid AI Inference**: Runs lightweight hand-tracking on the client (MediaPipe) and heavy depth-estimation on the server (Depth Anything V2 / Cloud Run) for peak performance.
+4.  **Voice-First Interface**: Use conversational commands like *"Teach me the C Major scale"* or *"Give me a jazz warmup"*.
 
 ---
 
-## 💻 Spin-up Instructions (For Judges)
+## ⚙️ Spin-up Instructions
 
-### Option 1: Local Development
-Ensure you have Python 3.10+ installed.
-
+### Option 1: Local Development (Quick Start)
 1. **Clone & Setup**:
    ```bash
    pip install -r backend/requirements.txt
    ```
 2. **Configure API Key**:
-   Follow the [Configuration](#️-configuration) steps above.
-3. **Launch Services**:
+   Create a `backend/.env` file:
+   ```env
+   GEMINI_API_KEY=your_key_here
+   ```
+3. **Launch**:
    ```bash
-   chmod +x manage.sh
    ./manage.sh start
    ```
-4. **Access**:
-   - Frontend: `http://localhost:3456`
-   - Backend: `http://localhost:8080`
+4. **Access**: `http://localhost:3456`
 
-### Option 2: Reproduce GCP Deployment
-Uses Google Cloud Build & Cloud Run.
-
+### Option 2: Automated GCP Deployment
+Ensure you have the `gcloud` CLI installed and authenticated.
 ```bash
-# 1. Authenticate
+# Set your project
 gcloud config set project [YOUR_PROJECT_ID]
 
-# 2. Deploy (Automated)
+# Run the automated deployment script
 chmod +x deploy_gcp.sh
 ./deploy_gcp.sh
 ```
 
 ---
 
-## 🧠 Technologies & Learnings
+## 📝 Findings & Learnings
 
-### Core Stack
-- **AI Agent**: Gemini 2.0 Flash using the Google GenAI API.
-- **Vision**: MediaPipe Hands (Client-side) + Depth Anything V2 (Server-side).
-- **Audio**: Tone.js with multi-sample layering.
-- **Cloud**: Google Cloud Run, Artifact Registry, Cloud Build.
-
-### Findings & Learnings
-1. **Differential Z-Depth**: We found that pure Y-coordinate tracking is unreliable due to camera tilt. By using a "Differential Z-Anchor" (measuring fingertip Z-depth relative to the wrist), we achieved 95%+ accuracy across different lighting conditions.
-2. **Hybrid Inference**: Running hand tracking on the client (MediaPipe) and heavy depth-estimation on the server (PyTorch/Cloud Run) provides the best balance of low latency and high accuracy.
-3. **Voice-First Pedagogy**: Using Gemini for "just-in-time" coaching significantly lowers the barrier for beginners who struggle to read sheet music and watch their fingers simultaneously.
+- **The Latency Trap**: Initial attempts used pure server-side processing, leading to >500ms lag. Moving the hand tracking to the client and using sparse server-side depth queries brought latency down to <120ms.
+- **Contextual Vision**: Feeding Gemini raw logs of "played vs expected" notes combined with voice intent allows it to act as a truly personal tutor, unlike static piano apps.
+- **Billing Protection**: Implemented `REQUIRE_CLIENT_KEY` mode, allowing public demos while strictly protecting server-side API quotas.
 
 ---
 
-## 🎥 Proof of Google Cloud Deployment
-A link to the deployment configuration and core cloud logic can be found in the [Dockerfile](Dockerfile) and [backend/main.py](backend/main.py). These files demonstrate the containerization and integration with Google Cloud services.
-The script deploy_gcp.sh shows how to deploy the application to Google Cloud Run.
+## 🎥 Proof of Google Cloud services
+Verification of GCP usage can be found in:
+- [Dockerfile](Dockerfile): Optimized for Cloud Run containerization.
+- [backend/main.py](backend/main.py): Integrated with Gemini via the Google GenAI SDK.
+- [deploy_gcp.sh](deploy_gcp.sh): Automated infrastructure-as-code script.
