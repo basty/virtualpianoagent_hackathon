@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AI Piano Coach — Gemini Live</title>
+    <meta
+      name="description"
+      content="Real-time AR piano learning powered by Gemini AI. Play a virtual piano on your desk and get coached by AI."
+    />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="styles/main.css" />
+  </head>
+  <body>
+    <!-- ── Loading Screen ── -->
+    <div id="loading-screen" class="loading-screen">
+      <div class="loading-content">
+        <div class="loading-logo">🎹</div>
+        <h1 class="loading-title">AI Piano Coach</h1>
+        <p class="loading-subtitle">Powered by Gemini Live</p>
+
+        <!-- Start button — shown before boot starts -->
+        <button id="start-btn" class="btn btn-start">
+          <span>🎬</span> Start Session
+        </button>
+
+        <!-- Progress — hidden until boot begins -->
+        <div id="loading-progress" class="hidden">
+          <div class="loading-bar">
+            <div class="loading-bar-fill" id="loading-bar-fill"></div>
+          </div>
+          <p class="loading-status" id="loading-status">Starting…</p>
+        </div>
+
+        <!-- Error message -->
+        <p class="loading-error hidden" id="loading-error"></p>
+      </div>
+    </div>
+
+    <!-- ── Main App ── -->
+    <div id="app" class="app hidden">
+      <!-- Header -->
+      <header class="app-header">
+        <div class="logo">
+          <span class="logo-icon">🎹</span>
+          <span class="logo-text">AI Piano Coach</span>
+        </div>
+        <div class="header-controls">
+          <div class="header-toggles">
+            <div class="toggle-group">
+              <label class="switch">
+                <input type="checkbox" id="conversational-toggle" />
+                <span class="slider round"></span>
+              </label>
+              <span class="toggle-label">Conversational AI</span>
+            </div>
+          </div>
+          <div class="status-badge" id="ai-status-badge">
+            <span class="status-dot"></span>
+            <span id="ai-status-text">AI Ready</span>
+          </div>
+          <button class="btn btn-icon" id="settings-btn" title="Settings">⚙️</button>
+        </div>
+      </header>
+
+      <!-- Main Canvas Stage -->
+      <main class="stage">
+        <!-- Camera + canvas layers -->
+        <div class="canvas-stack" id="canvas-stack">
+          <video id="camera-feed" autoplay muted playsinline></video>
+          <!-- MediaPipe landmark overlay -->
+          <canvas id="landmark-canvas"></canvas>
+          <!-- Three.js piano overlay -->
+          <canvas id="piano-canvas"></canvas>
+          <!-- HUD overlay -->
+          <div class="hud" id="hud">
+            <div class="hud-top">
+              <div class="fps-counter" id="fps-counter">-- FPS</div>
+              <div class="note-display" id="note-display">--</div>
+            </div>
+            <div class="hud-bottom">
+              <div class="listening-indicator hidden" id="listening-indicator">
+                <div class="pulse-ring"></div>
+                <div class="pulse-dot"></div>
+              </div>
+              <div class="coach-bubble hidden" id="coach-bubble">
+                <div class="coach-avatar">🤖</div>
+                <p id="coach-message"></p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Side panel -->
+        <aside class="side-panel" id="side-panel">
+          <!-- Tabs -->
+          <div class="tab-bar">
+            <button class="tab-btn active" data-tab="coach" id="tab-coach">Coach</button>
+            <button class="tab-btn" data-tab="exercises" id="tab-exercises">Exercises</button>
+            <button class="tab-btn" data-tab="stats" id="tab-stats">Stats</button>
+          </div>
+
+          <!-- Coach Tab -->
+          <div class="tab-content active" id="tab-content-coach">
+            <div class="chat-area" id="chat-area">
+              <div class="chat-message ai">
+                <span class="chat-icon">🎹</span>
+                <p>Hi! I'm your AI piano coach. Say <em>"Teach me a scale"</em> to get started, or pick an exercise.</p>
+              </div>
+            </div>
+            <div class="voice-input-bar">
+              <button class="btn btn-voice" id="voice-btn" title="Hold to speak">
+                <span class="mic-icon" id="mic-icon">🎤</span>
+                <span id="voice-btn-label">Hold to speak</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Exercises Tab -->
+          <div class="tab-content hidden" id="tab-content-exercises">
+            <div class="exercise-list" id="exercise-list">
+              <!-- Populated by JS -->
+            </div>
+          </div>
+
+          <!-- Stats Tab -->
+          <div class="tab-content hidden" id="tab-content-stats">
+            <div class="stats-grid" id="stats-grid">
+              <div class="stat-card">
+                <div class="stat-value" id="stat-notes-played">0</div>
+                <div class="stat-label">Notes Played</div>
+              </div>
+              <div class="stat-card">
+                <div class="stat-value" id="stat-accuracy">--%</div>
+                <div class="stat-label">Accuracy</div>
+              </div>
+              <div class="stat-card">
+                <div class="stat-value" id="stat-exercises">0</div>
+                <div class="stat-label">Exercises Done</div>
+              </div>
+              <div class="stat-card">
+                <div class="stat-value" id="stat-streak">0🔥</div>
+                <div class="stat-label">Current Streak</div>
+              </div>
+            </div>
+            <div class="notes-history-section">
+              <h3>Recent Notes</h3>
+              <div class="notes-history" id="notes-history"></div>
+            </div>
+          </div>
+        </aside>
+      </main>
+
+      <!-- Bottom toolbar -->
+      <footer class="bottom-toolbar">
+        <div class="footer-center">
+          <div class="exercise-progress" id="exercise-progress-container" style="display:none">
+            <span id="exercise-progress-label">C Major Scale</span>
+            <div class="progress-bar">
+              <div class="progress-fill" id="exercise-progress-fill"></div>
+            </div>
+          </div>
+          <!-- New Training HUD -->
+          <div class="training-hud hidden" id="training-hud">
+             <span class="training-target" id="training-target">Press C4</span>
+             <div class="training-progress-dots" id="training-dots"></div>
+          </div>
+        </div>
+        <div class="footer-actions">
+           <button class="btn btn-secondary" id="calibrate-btn">🎯 Calibrate</button>
+           <button class="btn btn-primary hidden" id="train-ai-btn">🧠 Train AI</button>
+           <button class="btn btn-danger" id="stop-btn">⏹ Stop</button>
+        </div>
+      </footer>
+    </div>
+
+    <!-- ── Settings Modal ── -->
+    <div class="modal-overlay hidden" id="settings-modal">
+      <div class="modal">
+        <div class="modal-header">
+          <h2>Settings</h2>
+          <button class="btn btn-icon" id="close-settings-btn">✕</button>
+        </div>
+        <form id="settings-form" class="modal-body" onsubmit="event.preventDefault();">
+          <div class="setting-row">
+            <label for="api-key-input">Gemini API Key (from AI Studio)</label>
+            <input type="password" id="api-key-input" name="apiKey" placeholder="AIza…" autocomplete="off" />
+          </div>
+          <div class="setting-row">
+            <label for="octave-select">Octave</label>
+            <select id="octave-select">
+              <option value="3">Octave 3</option>
+              <option value="4" selected>Octave 4 (default)</option>
+              <option value="5">Octave 5</option>
+            </select>
+          </div>
+          <div class="setting-row">
+            <label for="key-range-input">Key Range (e.g. C4-B4, C4-G5)</label>
+            <input type="text" id="key-range-input" placeholder="C4-B4" value="C4-B4" />
+          </div>
+          <div class="setting-row">
+            <label for="volume-slider">Volume</label>
+            <input type="range" id="volume-slider" min="0" max="100" value="80" />
+          </div>
+          <div class="setting-row">
+            <label for="debounce-slider">Key Debounce (ms)</label>
+            <input type="range" id="debounce-slider" min="100" max="800" value="300" />
+            <span id="debounce-value">300ms</span>
+          </div>
+          <div class="setting-row">
+            <label for="detection-mode-select">Detection Logic</label>
+            <select id="detection-mode-select">
+              <optgroup label="Advanced">
+                <option value="hybrid">Hybrid Kinetic</option>
+              </optgroup>
+              <optgroup label="Surface Touch Options">
+                <option value="surface_floor">Surface: Dynamic Floor (Tracks lowest Y)</option>
+                <option value="surface_stop" selected>Surface: Motion Stop (Detects halt) (Default)</option>
+                <option value="surface_v5">Surface: V5 (Calibrated Y + Velocity)</option>
+                <option value="surface_ai">AI v1: Calibrated 3D Surface</option>
+                <option value="surface_ai_v2">AI v2: Velocity + Smoothing (GitHub)</option>
+                <option value="surface_pv">Method 8: PressureVision++ Inspired</option>
+                <option value="surface_mlp">Method 9: Personal MLP Classifier ✨</option>
+                <option value="surface_lstm">Method 10: TypeNet LSTM ✨</option>
+                <option value="surface_3dsvd">Method 11: 3D SVD Plane Fit + Debug Overlay 🔬</option>
+                <option value="surface_ai_v12">Method 12: Depth Anything V2 (Backend GPU) 🌊</option>
+              </optgroup>
+            </select>
+          </div>
+          
+          <div class="setting-group-title">Piano Dimensions</div>
+          <div class="setting-row">
+            <label for="white-key-width-slider">White Key Width Scale</label>
+            <input type="range" id="white-key-width-slider" min="0.5" max="1.5" step="0.05" value="1.0" />
+            <span id="white-key-width-value">1.0x</span>
+          </div>
+          <div class="setting-row">
+            <label for="white-key-height-slider">White Key Height Scale</label>
+            <input type="range" id="white-key-height-slider" min="0.5" max="1.5" step="0.05" value="1.0" />
+            <span id="white-key-height-value">1.0x</span>
+          </div>
+          <div class="setting-row">
+            <label for="black-key-width-slider">Black Key Width Scale</label>
+            <input type="range" id="black-key-width-slider" min="0.2" max="1.0" step="0.05" value="0.55" />
+            <span id="black-key-width-value">0.55x</span>
+          </div>
+          <div class="setting-row">
+            <label for="black-key-height-slider">Black Key Height Scale</label>
+            <input type="range" id="black-key-height-slider" min="0.1" max="1.0" step="0.05" value="0.4" />
+            <span id="black-key-height-value">0.4x</span>
+          </div>
+          <div class="setting-row">
+            <label for="camera-select">Camera</label>
+            <select id="camera-select"></select>
+          </div>
+          <div class="setting-row" style="flex-direction: row; justify-content: space-between; align-items: center;">
+            <label for="flip-piano-checkbox" style="margin-bottom: 0;">Flip Piano (Black keys at bottom)</label>
+            <input type="checkbox" id="flip-piano-checkbox" style="width: auto;" checked />
+          </div>
+          <div class="setting-row" style="flex-direction: row; justify-content: space-between; align-items: center;">
+            <label for="hide-black-keys-checkbox" style="margin-bottom: 0;">Hide Black Keys</label>
+            <input type="checkbox" id="hide-black-keys-checkbox" style="width: auto;" />
+          </div>
+          <div class="setting-row" style="flex-direction: row; justify-content: space-between; align-items: center;">
+            <label for="highlight-hover-checkbox" style="margin-bottom: 0;">Highlight Keys on Hover</label>
+            <input type="checkbox" id="highlight-hover-checkbox" style="width: auto;" />
+          </div>
+          <div class="setting-row" style="flex-direction: column; gap: 8px;">
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+              <label style="margin-bottom:0;">Personal AI Model</label>
+              <div style="display:flex; gap:8px; align-items:center;">
+                <span id="ml-status-badge" style="font-size:11px; padding:2px 8px; border-radius:10px; background:rgba(255,255,255,0.08); color:#aaa;">⚪ Not trained</span>
+                <button type="button" class="btn btn-secondary hidden" id="settings-train-btn" style="padding: 2px 8px; font-size: 10px;">🧠 Train</button>
+              </div>
+            </div>
+            <div id="ml-training-log" style="font-size:11px; color:#7c6cff; min-height:16px; font-family:monospace; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;"></div>
+          </div>
+        </form>
+        <div class="modal-footer">
+          <button type="submit" form="settings-form" class="btn btn-primary" id="save-settings-btn">Save</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Scripts — order matters -->
+    <!-- MediaPipe via CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/control_utils/control_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+    <!-- Three.js via CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
+    <!-- TensorFlow.js — required for Methods 9 (MLP) and 10 (LSTM) -->
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.17.0/dist/tf.min.js"></script>
+    <!-- Tone.js via CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/tone@14.7.77/build/Tone.js"></script>
+
+    <!-- App modules -->
+    <script type="module">
+      // NOTE: We use dynamic import() inside the click handler so that:
+      // 1. The button listener is ALWAYS registered (even if a module has errors)
+      // 2. Any boot/import errors surface as visible messages, not silent freezes
+      // 3. The import happens after the user gesture, satisfying browser policies
+
+      const startBtn     = document.getElementById('start-btn');
+      const progressArea = document.getElementById('loading-progress');
+      const errorEl      = document.getElementById('loading-error');
+
+      startBtn.addEventListener('click', async () => {
+        startBtn.classList.add('hidden');
+        errorEl.classList.add('hidden');
+        progressArea.classList.remove('hidden');
+
+        try {
+          const { boot } = await import('./src/main.js');
+          await boot();
+        } catch (err) {
+          console.error('[boot] fatal:', err);
+          
+          let friendlyMsg = err.message || err;
+          if (friendlyMsg.includes('Permission denied')) {
+            friendlyMsg = '🚫 Camera access denied. Please click the camera icon in your address bar and "Allow" access, then reload.';
+          } else if (friendlyMsg.includes('Could not establish connection')) {
+            friendlyMsg = '🔌 Connection error. Is the backend running?';
+          }
+          
+          errorEl.textContent = `⚠️ ${friendlyMsg}`;
+          errorEl.classList.remove('hidden');
+          progressArea.classList.add('hidden');
+          startBtn.textContent = '🔄 Retry';
+          startBtn.classList.remove('hidden');
+        }
+      });
+    </script>
+  </body>
+</html>
