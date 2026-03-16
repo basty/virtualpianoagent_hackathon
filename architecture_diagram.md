@@ -1,3 +1,4 @@
+```mermaid
 graph TD
     subgraph Client ["Client Browser (PWA/UX)"]
         UI["Modern UI (Vanilla JS/CSS)"]
@@ -41,3 +42,4 @@ graph TD
     style Client fill:#f9f,stroke:#333,stroke-width:2px
     style GCP fill:#4285F4,stroke:#fff,stroke-width:2px,color:#fff
     style AI fill:#ecc,stroke:#333,stroke-width:2px
+```

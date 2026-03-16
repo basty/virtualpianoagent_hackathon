@@ -66,8 +66,8 @@ graph TD
     UI --> WS
 
     %% Backend Communication
-    UI <---- "WebSocket / REST" ----> FastAPI
-    FastAPI <---- "GenAI SDK" ----> Gemini
+    UI -- "WebSocket / REST" <--> FastAPI
+    FastAPI -- "GenAI SDK" <--> Gemini
     FastAPI -- "PyTorch" --> Depth
     
     %% Deployment flow
