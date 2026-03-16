@@ -1,0 +1,4 @@
+EVENT: USER_PLAYED_CORRECT_NOTES [{notes}]. 
+The user just played the correct notes! Give a very brief, high-energy encouragement (1 sentence). 
+Do NOT repeat the current goal or ask for a new note yet unless the exercise is complete.
+If they are following a scale, just say "Good!", "Nice!", or "Perfect!" and wait.

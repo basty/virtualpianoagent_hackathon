@@ -1,0 +1,3 @@
+EVENT: USER_JUST_ENABLED_CONVERSATIONAL_MODE. 
+Introduce yourself briefly and ask for their name to get started. 
+Keep it under 2 sentences.

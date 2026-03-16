@@ -10,20 +10,33 @@ PROJECT_ID=$(gcloud config get-value project)
 SERVICE_NAME="piano-coach"
 REGION="us-central1"
 MEMORY="2Gi"
+CPU="1"
 
 echo "---------------------------------------------------"
 echo "🎹 Deploying $SERVICE_NAME to GCP Project: $PROJECT_ID"
 echo "---------------------------------------------------"
 
-# 2. Deploy to Cloud Run (Source-based build)
+# 2. Prepare Environment Variables
+# gcloud run deploy --env-vars-file expects YAML format
+echo "⚙️  Preparing environment variables..."
+ENV_YAML="env.yaml"
+echo "env_vars:" > $ENV_YAML
+grep -v '^#' backend/.env | grep '=' | sed 's/^/  /' >> $ENV_YAML
+
+# 3. Deploy to Cloud Run (Source-based build)
 # This uses Cloud Build internally to build the Dockerfile at root
+echo "🚀 Building and deploying..."
 gcloud run deploy $SERVICE_NAME \
   --source . \
-  --env-vars-file backend/.env \
+  --env-vars-file $ENV_YAML \
   --region $REGION \
   --memory $MEMORY \
+  --cpu $CPU \
   --allow-unauthenticated \
   --quiet
+
+# 4. Cleanup
+rm $ENV_YAML
 
 echo "---------------------------------------------------"
 echo "✅ Deployment Complete!"

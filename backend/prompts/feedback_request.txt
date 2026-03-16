@@ -1,0 +1,6 @@
+FEEDBACK_REQUEST:
+Exercise: {exercise}
+Expected: {expected}
+Student played: {played}
+{tempo_info}
+Give 1-2 sentences of specific, encouraging feedback based on this performance.

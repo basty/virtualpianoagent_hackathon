@@ -57,8 +57,8 @@ export class GeminiCoach {
     }
   }
 
-  /** Called when the user sends a voice/text message. */
-  async sendMessage(userText) {
+  /** Called when the user sends a voice/text message, optionally with an image. */
+  async sendMessage(userText, imageB64 = null) {
     // If already sending, queue it up
     if (this._isSending) {
       return new Promise((resolve) => {
@@ -71,6 +71,7 @@ export class GeminiCoach {
       const body = {
         session_id:   this._sessionId,
         user_message: userText,
+        image:        imageB64,
       };
       if (this._apiKey) body.api_key = this._apiKey;
 
@@ -116,8 +117,6 @@ export class GeminiCoach {
   /** Called every time a note is detected. */
   onNotePlayed(note, correct = null) {
     if (this._conversational) {
-      // In conversational mode, we send more immediate "hint" events to the AI
-      // but we throttle them to avoid overwhelming the API
       this._noteBuffer.push(note);
       clearTimeout(this._feedbackTimer);
 
@@ -125,12 +124,11 @@ export class GeminiCoach {
         const notes = this._noteBuffer.join(', ');
         this._noteBuffer = [];
         if (correct === false) {
-          this.sendMessage(`EVENT: USER_PLAYED_WRONG_NOTES [${notes}]. They should have played the next note in exercise.`);
+          this.sendMessage(`EVENT: USER_PLAYED_WRONG_NOTES [${notes}]`);
         } else if (correct === true) {
-          this.sendMessage(`EVENT: USER_PLAYED_CORRECT_NOTES [${notes}]. Encourage them!`);
+          this.sendMessage(`EVENT: USER_PLAYED_CORRECT_NOTES [${notes}]`);
         } else {
-          // General play feedback
-          this.sendMessage(`EVENT: USER_PLAYED_NOTES [${notes}]. Just give a quick comment if relevant.`);
+          this.sendMessage(`EVENT: USER_PLAYED_NOTES [${notes}]`);
         }
       }, 1500);
     } else {
@@ -146,10 +144,14 @@ export class GeminiCoach {
     }
   }
 
-  /** Called periodically with posture analysis */
-  onPostureAnalysis(msg) {
+  /** Called periodically with posture analysis. Now triggers an image-based check. */
+  onPostureAnalysis(imageB64) {
     if (this._conversational) {
-      this.sendMessage(`EVENT: POSTURE_HINT: ${msg}`);
+      // Safeguard: Don't queue more than one posture check
+      const alreadyQueued = this._queue.some(q => q.text.includes("POSTURE_CHECK"));
+      if (this._isSending || alreadyQueued) return;
+
+      this.sendMessage("EVENT: POSTURE_CHECK", imageB64);
     }
   }
 

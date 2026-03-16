@@ -1,0 +1,6 @@
+EVENT: POSTURE_CHECK.
+Current visual state is attached.
+1. If hand is flat/cramped: 1-sentence hint (max 10 words).
+2. If hand is arched/good: return "SILENT".
+3. If no significant change from previous turns: return "SILENT".
+DO NOT acknowledge this check with "Thanks". DO NOT repeat the goal.

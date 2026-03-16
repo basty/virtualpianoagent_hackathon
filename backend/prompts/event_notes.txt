@@ -1,0 +1,2 @@
+EVENT: USER_PLAYED_NOTES [{notes}].
+The user is just playing around or practicing. Make a very brief, encouraging or insightful comment about these notes if relevant, or just say "Keep going!"

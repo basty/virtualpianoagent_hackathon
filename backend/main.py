@@ -22,7 +22,8 @@ from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
-import httpx
+from google import genai
+from google.genai import types
 
 import depth_engine
 
@@ -42,31 +43,57 @@ _RAW_KEY = os.getenv("GEMINI_API_KEY", "")
 # Strip quotes (common in .env files handled by some shells) and whitespace
 GEMINI_API_KEY = _RAW_KEY.strip(' "').strip()
 
-# When true, the backend will NOT use the server-side GEMINI_API_KEY
-# and will instead strictly require an api_key in the request.
-REQUIRE_CLIENT_KEY = os.getenv("REQUIRE_CLIENT_KEY", "false").lower() == "true"
+GEMINI_MODEL    = os.getenv("GEMINI_MODEL", "gemini-2.0-flash")
 
-GEMINI_MODEL    = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
-GEMINI_ENDPOINT = (
-    f"https://generativelanguage.googleapis.com/v1beta/models/"
-    f"{GEMINI_MODEL}:generateContent"
-)
+# ── Prompts ────────────────────────────────────────────────
+PROMPTS_DIR = Path(__file__).parent / "prompts"
 
-PROMPT_FILE = Path(__file__).parent / "prompts.txt"
-
-def load_system_instruction() -> str:
-    """Load the system instruction from prompts.txt."""
+def load_prompt(name: str, fallback: str = "") -> str:
+    path = PROMPTS_DIR / f"{name}.txt"
     try:
-        if PROMPT_FILE.exists():
-            return PROMPT_FILE.read_text(encoding="utf-8")
-        else:
-            print(f"Warning: {PROMPT_FILE} not found. Using minimal fallback.")
-            return "You are an AI piano coach."
+        if path.exists():
+            return path.read_text(encoding="utf-8").strip()
+        return fallback
     except Exception as e:
-        print(f"Error loading prompt file: {e}")
-        return "You are an AI piano coach."
+        print(f"Error loading prompt {name}: {e}")
+        return fallback
 
-SYSTEM_INSTRUCTION = load_system_instruction()
+SYSTEM_INSTRUCTION = load_prompt("system", "You are an AI piano coach.")
+
+def expand_event(text: str) -> str:
+    """Detect EVENT: macros and expand them using local templates."""
+    # Simple macro expansion. For more complex cases, use regex.
+    if text.startswith("EVENT: POSTURE_CHECK"):
+        tpl = load_prompt("event_posture")
+        return tpl if tpl else text # Fallback to original if template missing
+    
+    if "USER_PLAYED_CORRECT_NOTES" in text:
+        notes = text.split("[")[-1].split("]")[0] if "[" in text else ""
+        tpl = load_prompt("event_correct")
+        return tpl.replace("{notes}", notes) if tpl else text
+        
+    if "USER_PLAYED_WRONG_NOTES" in text:
+        notes = text.split("[")[-1].split("]")[0] if "[" in text else ""
+        tpl = load_prompt("event_wrong")
+        return tpl.replace("{notes}", notes) if tpl else text
+
+    if "USER_PLAYED_NOTES" in text:
+        notes = text.split("[")[-1].split("]")[0] if "[" in text else ""
+        tpl = load_prompt("event_notes")
+        return tpl.replace("{notes}", notes) if tpl else f"I just played these notes: {notes}. Any comments?"
+
+    if "USER_JUST_ENABLED_CONVERSATIONAL_MODE" in text:
+        tpl = load_prompt("event_intro")
+        return tpl if tpl else text
+
+    if text.startswith("FEEDBACK_REQUEST:"):
+        tpl = load_prompt("feedback_request")
+        if not tpl: return text
+        # Mock parsing of the string produced by frontend legacy mode
+        # "Exercise: {ex} Expected: {exp} Student played: {p} {tempo}"
+        return tpl # The frontend usually sends a well-formatted string already, but we can wrap it
+
+    return text
 
 # ── In-memory session store ──
 sessions: dict[str, dict] = {}
@@ -97,6 +124,7 @@ app.add_middleware(
 class ChatRequest(BaseModel):
     session_id: str
     user_message: str
+    image: Optional[str] = None  # Base64 string
     api_key: Optional[str] = None
 
 class FeedbackRequest(BaseModel):
@@ -125,23 +153,47 @@ async def chat(req: ChatRequest):
         _ensure_session(req.session_id)
         history = sessions[req.session_id]["history"]
 
-        # Add user message
-        history.append({"role": "user", "parts": [{"text": req.user_message}]})
+        # Add user message with event expansion
+        expanded_msg = expand_event(req.user_message)
+        print(f"[Chat] User msg: {expanded_msg[:100]}...") # Log first 100 chars
+        parts = [{"text": expanded_msg}]
+        if req.image:
+            parts.append({
+                "inline_data": {
+                    "mime_type": "image/jpeg",
+                    "data": req.image
+                }
+            })
 
-        # Maintenance: Keep history clean by removing very old EVENT messages
-        # but keep actual user dialog.
-        if len(history) > 30:
-            # Keep the last 20 messages, but filter out events from the older portion
+        # Add user message
+        history.append({"role": "user", "parts": parts})
+
+        # 2. Maintenance: Aggressively strip images from history
+        # We only want Gemini to see the image in the turn it was sent.
+        # This prevents the AI from "remembering" a flat hand for 5 turns and looping feedback.
+        for msg in history[:-1]: # Strip from everything EXCEPT the message we just added
+            new_parts = []
+            for p in msg.get("parts", []):
+                if "inline_data" not in p:
+                    new_parts.append(p)
+            msg["parts"] = new_parts
+
+        # 3. Limit message count to keep latency low
+        if len(history) > 40:
             prefix = history[:-20]
             suffix = history[-20:]
-            # Only keep non-EVENT messages in the prefix
-            clean_prefix = [m for m in prefix if "EVENT:" not in m["parts"][0]["text"]]
+            clean_prefix = [m for m in prefix if "EVENT:" not in m["parts"][0].get("text", "")]
             sessions[req.session_id]["history"] = clean_prefix + suffix
             history = sessions[req.session_id]["history"]
 
-        print(f"[Chat] Session {req.session_id} history size: {len(history)}")
+        print(f"[Chat] Session {req.session_id} history size: {len(history)} messages. Image included: {bool(req.image)}")
 
-        reply = await _call_gemini(history, req.api_key)
+        reply = await _call_gemini_sdk(history, req.api_key)
+        
+        # If the AI says SILENT, we don't return anything to the user
+        if reply.strip().upper() == "SILENT":
+            return {"reply": ""}
+
         history.append({"role": "model", "parts": [{"text": reply}]})
 
         return {"reply": reply}
@@ -164,7 +216,7 @@ async def feedback(req: FeedbackRequest):
         history = sessions[req.session_id]["history"]
         history.append({"role": "user", "parts": [{"text": f"FEEDBACK_REQUEST: {prompt}"}]})
         
-        feedback_text = await _call_gemini(history, req.api_key)
+        feedback_text = await _call_gemini_sdk(history, req.api_key)
         history.append({"role": "model", "parts": [{"text": feedback_text}]})
 
         return {"feedback": feedback_text}
@@ -223,48 +275,47 @@ def _ensure_session(sid: str):
         sessions[sid] = {"history": [], "stats": {}}
 
 
-async def _call_gemini(history: list[dict], api_key: Optional[str] = None) -> str:
+async def _call_gemini_sdk(history: list[dict], api_key: Optional[str] = None) -> str:
     # Clean the provided key if any
     clean_request_key = api_key.strip(' "').strip() if api_key else None
     
-    # Selection logic:
-    # 1. Use key from request if provided
-    # 2. If REQUIRE_CLIENT_KEY is False, use GEMINI_API_KEY from server env
-    # 3. Otherwise, key is missing
-    key = clean_request_key
-    if not key and not REQUIRE_CLIENT_KEY:
-        key = GEMINI_API_KEY
-
+    # Use provided key or fall back to server env
+    key = clean_request_key or GEMINI_API_KEY
     if not key:
-        msg = (
-            "Gemini API Key missing. "
-            "Please open Settings (⚙️) and enter your Gemini API Key to continue."
-            if REQUIRE_CLIENT_KEY else
-            "Gemini API Key missing. Please provide one in settings or server environment."
+        raise HTTPException(status_code=400, detail="Gemini API Key missing. Please provide one in settings or server environment.")
+
+    client = genai.Client(api_key=key, http_options={'api_version': 'v1beta'})
+    
+    # Map raw history to SDK Content objects
+    contents = []
+    for turn in history:
+        turn_parts = []
+        for p in turn["parts"]:
+            if "text" in p:
+                turn_parts.append(types.Part(text=p["text"]))
+            elif "inline_data" in p:
+                turn_parts.append(types.Part(
+                    inline_data=types.Blob(
+                        data=p["inline_data"]["data"],
+                        mime_type=p["inline_data"]["mime_type"]
+                    )
+                ))
+        contents.append(types.Content(role=turn["role"], parts=turn_parts))
+
+    try:
+        response = await client.aio.models.generate_content(
+            model=GEMINI_MODEL,
+            contents=contents,
+            config=types.GenerateContentConfig(
+                system_instruction=SYSTEM_INSTRUCTION,
+                temperature=0.4,
+                max_output_tokens=300,
+            )
         )
-        raise HTTPException(status_code=400, detail=msg)
-
-    body = {
-        "system_instruction": {"parts": [{"text": SYSTEM_INSTRUCTION}]},
-        "contents": history,
-        "generationConfig": {
-            "temperature":     0.4,
-            "maxOutputTokens": 300,
-        },
-    }
-
-    async with httpx.AsyncClient(timeout=15) as client:
-        resp = await client.post(
-            f"{GEMINI_ENDPOINT}?key={key}",
-            json=body,
-        )
-
-    if resp.status_code != 200:
-        detail = resp.json().get("error", {}).get("message", resp.text)
-        raise HTTPException(status_code=resp.status_code, detail=detail)
-
-    data = resp.json()
-    return data["candidates"][0]["content"]["parts"][0]["text"]
+        return response.text
+    except Exception as e:
+        print(f"Gemini SDK Error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 # ── Static Files ──────────────────────────────────────────

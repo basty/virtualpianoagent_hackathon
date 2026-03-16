@@ -18,6 +18,7 @@ export class VoiceIO {
     this._synthesis   = window.speechSynthesis;
     this._listening   = false;
     this._conversational = false; 
+    this._isSpeaking = false; // Manual flag for better reliability than speechSynthesis.speaking
 
     this._initRecognition();
     this._initVoices();
@@ -60,9 +61,10 @@ export class VoiceIO {
     }
   }
 
-  stopListening() {
+  stopListening(abort = false) {
     if (!this._listening || !this._recognition) return;
-    this._recognition.stop();
+    if (abort) this._recognition.abort();
+    else this._recognition.stop();
     this._listening = false;
   }
 
@@ -73,9 +75,8 @@ export class VoiceIO {
   async speak(text) {
     if (!this._synthesis) return;
     
-    // If in conversational mode, pause recognition so it doesn't hear itself
-    const wasListening = this._listening;
-    if (this._conversational) this.stopListening();
+    // If in conversational mode, abort recognition so it doesn't hear itself starting to speak
+    if (this._conversational) this.stopListening(true);
 
     this._synthesis.cancel(); // stop any ongoing speech
     
@@ -110,9 +111,11 @@ export class VoiceIO {
 
     utterance.onstart = () => {
        console.log('[VoiceIO] Speaking:', clean);
+       this._isSpeaking = true;
     };
-
+    
     utterance.onend = () => {
+      this._isSpeaking = false;
       // Resume listening if we were in conversational mode
       if (this._conversational) {
         // Wait 800ms before reopening mic for a more natural turn-taking feel
@@ -156,13 +159,12 @@ export class VoiceIO {
     this._recognition.onend = () => {
       this._listening = false;
       this._ui.setVoiceState(this._conversational);
-      // Continuous loop if conversational mode is on
       if (this._conversational) {
         setTimeout(() => {
-          if (this._conversational && !this._synthesis.speaking) {
+          if (this._conversational && !this._isSpeaking && !this._synthesis.speaking) {
             this.startListening();
           }
-        }, 100);
+        }, 300); // 300ms cushion
       }
     };
 

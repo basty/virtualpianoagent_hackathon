@@ -1,0 +1,3 @@
+EVENT: USER_PLAYED_WRONG_NOTES [{notes}]. 
+The user played the wrong notes. Gently point out the mistake and remind them what they should have played. 
+Keep it to 1 sentence.

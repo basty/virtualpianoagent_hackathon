@@ -114,6 +114,7 @@ export async function boot() {
   let calibrationFrames = [];
   let calibrationActive = false;
   let calibrationStartTime = 0;
+  let lastPostureHintTime = 0;
 
   tracker.onResults = (results) => {
     const landmarks = results.multiHandLandmarks ?? [];
@@ -160,18 +161,25 @@ export async function boot() {
       sound.noteOff(note);
     });
 
-    // Simple Posture Analysis (throttled)
-    if (landmarks.length > 0 && Math.random() < 0.01) {
-       const hand = landmarks[0];
-       // Check for "flat" hand (unnatural for piano) or "claw"
-       // We can check the angle of the wrist to the fingertips
-       const wrist = hand[0];
-       const middleFinger = hand[12];
-       if (wrist && middleFinger) {
-         const dy = Math.abs(middleFinger.y - wrist.y);
-         if (dy < 0.05) coach.onPostureAnalysis("The hand looks too flat! Try to arch your fingers like you are holding an orange.");
-         else if (dy > 0.4) coach.onPostureAnalysis("The hand looks a bit cramped. Try to relax your palm.");
-       }
+    // Vision-based Posture Analysis (throttled: max once every 60 seconds)
+    const now = Date.now();
+    if (landmarks.length > 0 && (now - lastPostureHintTime > 60000) && coach._conversational) {
+      lastPostureHintTime = now;
+      
+      // Capture a frame from the video feed
+      const video = camera.videoElement;
+      if (video && video.videoWidth > 0) {
+        const offCanvas = document.createElement('canvas');
+        // Scale down to save bandwidth and stay under token limits
+        offCanvas.width  = 320; 
+        offCanvas.height = 240;
+        const offCtx = offCanvas.getContext('2d');
+        offCtx.drawImage(video, 0, 0, offCanvas.width, offCanvas.height);
+        
+        // Quality 0.5 is enough for posture check
+        const b64 = offCanvas.toDataURL('image/jpeg', 0.5).split(',')[1];
+        coach.onPostureAnalysis(b64);
+      }
     }
 
     ui.updateFPS(tracker.fps);
