@@ -51,6 +51,12 @@ If you are testing the **[Live Demo](https://piano-coach-894751491089.us-central
    GEMINI_API_KEY=your_actual_key_here
    ```
 
+### 🔒 Public/Production Deployment (Protecting your billing)
+If you are hosting this publicly and want to **avoid users consuming your own API quota**:
+1. Set the environment variable `REQUIRE_CLIENT_KEY=true`.
+2. This disables the server-side fallback. 
+3. Users will be prompted to enter their own key in the **⚙️ Settings** menu before they can use the AI Coach features.
+
 ---
 
 ## 💻 Spin-up Instructions (For Judges)
