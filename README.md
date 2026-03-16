@@ -122,9 +122,29 @@ chmod +x deploy_gcp.sh
 
 ---
 
-## 📝 Findings & Learnings
+## 📝 Findings & Learnings: The Path to Detection
 
-- **The Latency Trap**: Initial attempts used pure server-side processing, leading to >500ms lag. Moving the hand tracking to the client and using sparse server-side depth queries brought latency down to <120ms.
+Detecting a "piano press" on a flat table with a standard 2D webcam is a profound spatial challenge. We implemented and benchmarked **12 distinct algorithms** before identifying our proprietary "Differential Z-Anchor" as the winner.
+
+### Technical Exploration History
+
+| Method | Description | Outcome |
+| :--- | :--- | :--- |
+| **Differential Z-Anchor (Winner)** | **Z-depth relative to wrist + extension posture (>155°).** | **95%+ Accuracy; stable across different camera angles.** |
+| **Hybrid Kinetic** | Y-velocity + Z-spike + Finger curl angle fusion. | Good for hovers, but prone to false triggers during surface contact. |
+| **Dynamic Floor** | Local minima tracking (Lowest recorded Y-point). | Failed to distinguish between white and black key heights. |
+| **Motion Stop** | Halt detection (dy dropping to zero inside a key). | Prone to noise from sympathetic finger movements. |
+| **Calibrated Y** | Velocity reversal after crossing a fixed Y-threshold. | Highly sensitive to lighting and table surface reflections. |
+| **AI v1 (3D Plane)** | Least-squares fitting of a 3D plane to 7 landmarks. | Very light-dependent and lacked the required precision. |
+| **AI v2 (Smoothed)** | Exponential smoothing (α=0.3) on Y-coordinates. | Reduced "vibration" but introduced unacceptable latency. |
+| **PressureVision** | Hysteresis score based on Z-compression. | Required specific sensor hardware not available to consumers. |
+| **MLP Classifier** | TensorFlow.js MLP trained on-device. | High divergence; struggled with different hand sizes. |
+| **TypeNet LSTM** | Sequence analysis of fingertip movement patterns. | Requires massive datasets of diverse players to generalize. |
+| **3D SVD Plane** | Robust surface fitting via SVD decomposition. | Mathematically sound but computationally expensive for 60FPS. |
+| **Depth Anything** | Backend GPU Proxy for high-fidelity depth maps. | High fidelity but introduced lag that broke the musical rhythm. |
+
+### Key Learnings
+- **The Latency Trap**: Real-time music requires <100ms response times. Moving hand tracking to the client and using sparse server-side depth queries was the only way to achieve "musical" performance.
 - **Contextual Vision**: Feeding Gemini raw logs of "played vs expected" notes combined with voice intent allows it to act as a truly personal tutor, unlike static piano apps.
 - **Billing Protection**: Implemented `REQUIRE_CLIENT_KEY` mode, allowing public demos while strictly protecting server-side API quotas.
 
